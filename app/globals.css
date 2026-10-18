@@ -1,26 +1,47 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-bg: #FAFAF7;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F3F3EE;
+  --color-border: #E3E2DC;
+  --color-border-strong: #C9C7BE;
+  --color-text: #1A1A17;
+  --color-text-muted: #5C5A52;
+  --color-text-subtle: #8B897F;
+  --color-primary: #0F4C81;
+  --color-primary-hover: #0C3D68;
+  --color-primary-subtle: #E8EFF5;
+  --color-accent: #C2410C;
+  --color-whatsapp: #25D366;
+  --color-whatsapp-hover: #1DA851;
+  --color-success: #15803D;
+  --color-warning: #B45309;
+  --color-danger: #B91C1C;
+  --color-info: #0E7490;
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(26, 26, 23, 0.06);
+  --shadow-md: 0 4px 12px rgba(26, 26, 23, 0.08);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-primary-subtle);
 }
