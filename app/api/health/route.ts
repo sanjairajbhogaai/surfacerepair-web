@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
+import { db } from '@/lib/db';
 
-export function GET() {
-  return NextResponse.json({
-    data: { ok: true, db: 'not_configured', time: new Date().toISOString() },
-  });
+export async function GET() {
+  const time = new Date().toISOString();
+  try {
+    await db.$queryRaw`SELECT 1`;
+    return NextResponse.json({ data: { ok: true, db: 'ok', time } });
+  } catch {
+    return NextResponse.json(
+      { error: { code: 'UNAVAILABLE', message: 'Database unreachable.' } },
+      { status: 503 }
+    );
+  }
 }

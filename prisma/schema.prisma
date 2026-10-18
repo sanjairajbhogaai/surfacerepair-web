@@ -1,0 +1,256 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin-arm64", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RequestType {
+  REPAIR
+  QUOTE
+  BUSINESS_VISIT
+}
+
+enum RequestStatus {
+  RECEIVED
+  DIAGNOSING
+  AWAITING_PARTS
+  IN_PROGRESS
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum DeviceCategory {
+  SURFACE
+  LAPTOP
+  DESKTOP
+  MACBOOK
+  OTHER
+}
+
+enum ServicePreference {
+  DROP_OFF
+  PICKUP
+}
+
+enum ContactTime {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum NoteVisibility {
+  INTERNAL
+  CUSTOMER_VISIBLE
+}
+
+enum StaffRole {
+  OWNER
+  STAFF
+}
+
+enum AuditAction {
+  REQUEST_CREATED
+  REQUEST_STATUS_CHANGED
+  REQUEST_NOTE_ADDED
+  REQUEST_EMAIL_RESENT
+  CUSTOMER_UPDATED
+  STAFF_CREATED
+  STAFF_DEACTIVATED
+  STAFF_ROLE_CHANGED
+  SETTING_UPDATED
+  OWNER_SEEDED
+}
+
+enum NotificationKind {
+  CUSTOMER_CONFIRMATION
+  STAFF_ALERT
+  STATUS_UPDATE
+  MAGIC_LINK
+  STAFF_INVITE
+}
+
+model Customer {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  phone           String
+  phoneNormalized String   @unique
+  email           String?
+  emailNormalized String?  @unique
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  requests Request[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("customers")
+}
+
+model Request {
+  id                   String           @id @default(uuid()) @db.Uuid
+  ticketId             String           @unique
+  type                 RequestType
+  status               RequestStatus    @default(RECEIVED)
+  customerId           String           @db.Uuid
+  customer             Customer         @relation(fields: [customerId], references: [id])
+
+  deviceCategory       DeviceCategory?
+  deviceModel          String?
+  issueDescription     String
+  servicePreference    ServicePreference?
+  preferredContactTime ContactTime?
+  budgetExpectation    String?
+  companyName          String?
+  employeeCount        Int?
+  deviceSummary        String?
+  servicesNeeded       String[]         @default([])
+  preferredDateWindow  String?
+  notes                String?
+
+  trackTokenHash       String           @unique
+  submittedIp          String?          @db.Inet
+  submittedUserAgent   String?
+
+  emailSentAt          DateTime?
+
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  statusEvents         RequestStatusEvent[]
+  noteRecords          Note[]
+  notificationFailures NotificationFailure[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([type, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("requests")
+}
+
+model RequestStatusEvent {
+  id               String         @id @default(uuid()) @db.Uuid
+  requestId        String         @db.Uuid
+  request          Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status           RequestStatus
+  fromStatus       RequestStatus?
+  changedByStaffId String?        @db.Uuid
+  changedBy        StaffUser?     @relation(fields: [changedByStaffId], references: [id], onDelete: SetNull)
+  note             String?
+  createdAt        DateTime       @default(now())
+
+  @@index([requestId, createdAt])
+  @@map("request_status_events")
+}
+
+model Note {
+  id            String         @id @default(uuid()) @db.Uuid
+  requestId     String         @db.Uuid
+  request       Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorStaffId String         @db.Uuid
+  author        StaffUser      @relation(fields: [authorStaffId], references: [id], onDelete: Restrict)
+  body          String
+  visibility    NoteVisibility
+  createdAt     DateTime       @default(now())
+
+  @@index([requestId, visibility, createdAt(sort: Desc)])
+  @@map("notes")
+}
+
+model StaffUser {
+  id               String      @id @default(uuid()) @db.Uuid
+  name             String
+  email            String
+  emailNormalized  String      @unique
+  role             StaffRole
+  isActive         Boolean     @default(true)
+  invitedByStaffId String?     @db.Uuid
+  invitedBy        StaffUser?  @relation("InviteChain", fields: [invitedByStaffId], references: [id], onDelete: SetNull)
+  invitees         StaffUser[] @relation("InviteChain")
+  lastLoginAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  notes           Note[]
+  statusEvents    RequestStatusEvent[]
+  auditEntries    AuditLog[]
+  settingsUpdated Setting[]
+
+  @@index([role, isActive])
+  @@map("staff_users")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid()) @db.Uuid
+  actorStaffId String?     @db.Uuid
+  actor        StaffUser?  @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+  action       AuditAction
+  targetType   String
+  targetId     String?
+  metadata     Json?
+  ip           String?     @db.Inet
+  userAgent    String?
+  createdAt    DateTime    @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorStaffId, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+model Setting {
+  key              String     @id
+  value            Json
+  updatedByStaffId String?    @db.Uuid
+  updatedBy        StaffUser? @relation(fields: [updatedByStaffId], references: [id], onDelete: SetNull)
+  updatedAt        DateTime   @updatedAt
+
+  @@map("settings")
+}
+
+model AuthMagicLink {
+  identifier String
+  token      String   @id
+  expires    DateTime
+
+  @@index([expires])
+  @@map("auth_magic_links")
+}
+
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
+model NotificationFailure {
+  id           String           @id @default(uuid()) @db.Uuid
+  requestId    String?          @db.Uuid
+  request      Request?         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  kind         NotificationKind
+  provider     String
+  toEmail      String
+  subject      String
+  errorSummary String
+  attemptedAt  DateTime         @default(now())
+  resolvedAt   DateTime?
+
+  @@index([resolvedAt, attemptedAt(sort: Desc)])
+  @@index([requestId])
+  @@map("notification_failures")
+}
+
+model TicketSequence {
+  year       Int @id
+  lastNumber Int @default(0)
+
+  @@map("ticket_sequences")
+}
